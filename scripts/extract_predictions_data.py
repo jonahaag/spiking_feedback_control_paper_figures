@@ -16,23 +16,11 @@ generator.inputs/labels corresponds to sample index i everywhere else). Run from
     python extract_predictions_data.py
 """
 import os
-import sys
-import types
 
 import numpy as np
 import pandas as pd
 
 from summarize_runs import _load_pickle
-
-# datagenerator.py unconditionally imports the `mnist1d` package for its Mnist1DDataGenerator
-# class; stub it out so that unrelated import doesn't fail when we only need YinYangDataGenerator.
-if 'mnist1d.data' not in sys.modules:
-    stub_data = types.ModuleType('mnist1d.data')
-    stub_data.generate_mnist1d_raw = None
-    stub_data.get_dataset_args = None
-    sys.modules['mnist1d'] = types.ModuleType('mnist1d')
-    sys.modules['mnist1d.data'] = stub_data
-
 from datagenerator import YinYangDataGenerator
 
 RUN_PATH = '../dynapse_results/parallel_training/full/201286_2'
