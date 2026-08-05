@@ -15,13 +15,14 @@ from summarize_runs import latexify
 # Paul Tol's colorblind-safe muted palette.
 COLOR_FULL = '#117733'        # green -- full training regime (2b/3b, 4b/4c)
 COLOR_FROZEN = '#AA4499'      # purple -- frozen training regime (2b/3b, 4b/4c)
-COLOR_REFERENCE = '#882255'   # wine, reserved for reference/baseline lines
+COLOR_REFERENCE = '#999933'   # olive, reserved for reference/baseline lines
+COLOR_REFERENCE_2 = '#DDCC77' # sand, reserved for second reference/baseline lines
 
 COLOR_TARGET = '#CC6677'      # rose (3f, reused for predicted-class 2f)
 COLOR_NONTARGET = '#44AA99'   # teal (3f, reused for predicted-class 2f)
 COLOR_HIDDEN = '#332288'      # indigo -- hidden features (2d/4d) and input-to-hidden weights (2e)
 COLOR_HIDDEN_OUT = '#88CCEE'  # cyan -- hidden-to-output weights (2e)
-COLOR_FEEDBACK = '#DDCC77'    # sand -- feedback weights (2e)
+COLOR_FEEDBACK = '#882255'    # wine -- feedback weights (2e)
 
 CMAP_HIDDEN = LinearSegmentedColormap.from_list('hidden', [(1, 1, 1, 1), to_rgba(COLOR_HIDDEN)], N=100)  # (2d/4d)
 
@@ -34,13 +35,15 @@ TRAIN_FILL_ALPHA = 0.18
 
 # --- shared style helpers ---------------------------------------------------------------------
 
-def _sparse_grid(ax, axis='both', alpha=0.35):
+def _sparse_grid(ax, axis='y', alpha=0.35):
     """Grid at fewer, more widely-spaced ticks rather than matplotlib's dense default."""
-    if axis in ('both', 'x'):
-        ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
     if axis in ('both', 'y'):
         ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
-    ax.grid(True, axis=axis, alpha=alpha)
+    if axis in ('both', 'x'):
+        ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
+    ax.grid(True, axis='y', alpha=alpha)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
 
 # --- accuracy over training steps (2b/3b) -------------------------------------------------------
@@ -358,6 +361,7 @@ def plot_weight_distributions(df, colors, titles, pad_fraction=0.15, bw_adjust=0
         ax.set_title(titles[weight_type])
         ax.set_xlim(x.min(), x.max())
         ax.set_xlabel('Weight')
+        ax.tick_params(axis='x', labelsize=8)
         ax.get_yaxis().set_visible(False)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -394,4 +398,92 @@ def plot_predictions(df, class_col='predicted_class', colors=CLASS_COLOR, input_
     ax.set_ylabel('Input y [Hz]')
     ax.grid(True, color='black', alpha=1)
 
+    return fig
+
+def plot_sim_vs_dynapse_bars(df_dynapse, df_sim, y_min=0.0, y_max=1.0, group_order=None):
+    """Bar plot comparing Simulation vs. Dynapse for various methods.
+
+    Expects df_sim to contain 'note' and 'test accuracy (Max)'
+    Expects df_dynapse to contain 'regime' and 'accuracy' (processed via compute_best_val)
+    """
+    if group_order is None:
+        group_order = ['locally-learnt', 'frozen-hidden', 'fixed-feedback', 'surrogate gradient', 'backprop']
+        
+    # Process Dynapse
+    best_dynapse = compute_best_val(df_dynapse, 'accuracy', 'higher')
+    regime_map = {'full': 'locally-learnt', 'frozen': 'frozen-hidden'}
+    if 'note' not in best_dynapse.columns:
+        best_dynapse['note'] = best_dynapse['regime'].map(regime_map).fillna(best_dynapse['regime'])
+    dynapse_stats = best_dynapse.groupby('note')['accuracy'].agg(['mean', 'std']).reindex(group_order)
+    
+    # Process Simulation
+    sim_stats = df_sim.groupby('note')['test accuracy (Max)'].agg(['mean', 'std']).reindex(group_order)
+    
+    # Style matching plot_grouped_bars_by_chip exactly
+    latexify(width_fraction=0.6, base_font_size=9, height_ratio=0.7)
+    fig, ax = plt.subplots(constrained_layout=True)
+    width = 0.38
+    
+    # Method color mapping using Paul Tol palette defined at top of file
+    method_color_map = {
+        'locally-learnt': COLOR_FULL,
+        'frozen-hidden': COLOR_FROZEN,
+        'fixed-feedback': COLOR_NONTARGET,
+        'surrogate gradient': COLOR_HIDDEN_OUT,
+        'backprop': COLOR_REFERENCE,
+    }
+    
+    def _lighten(color_hex, factor=0.45):
+        from matplotlib.colors import to_rgb, to_hex
+        rgb = np.array(to_rgb(color_hex))
+        return to_hex((1 - factor) * rgb + factor * 1.0)
+    
+    x = np.arange(len(group_order))
+    
+    for i in range(len(x)):
+        note = group_order[i]
+        d_mean = dynapse_stats.iloc[i]['mean']
+        d_std = dynapse_stats.iloc[i]['std']
+        s_mean = sim_stats.iloc[i]['mean']
+        s_std = sim_stats.iloc[i]['std']
+        
+        c_dyn = method_color_map.get(note, COLOR_FULL)
+        c_sim = _lighten(c_dyn)
+        
+        # If dynapse data is present, plot side-by-side
+        if pd.notna(d_mean) and d_mean > 0:
+            ax.bar(x[i] - width/2, s_mean, width, yerr=0 if pd.isna(s_std) else s_std, 
+                   capsize=3, color=c_sim, error_kw={'elinewidth': 1})
+            ax.bar(x[i] + width/2, d_mean, width, yerr=0 if pd.isna(d_std) else d_std, 
+                   capsize=3, color=c_dyn, error_kw={'elinewidth': 1})
+        else:
+            # Center the bar if dynapse is missing
+            ax.bar(x[i], s_mean, width, yerr=0 if pd.isna(s_std) else s_std, 
+                   capsize=3, color=c_sim, error_kw={'elinewidth': 1})
+
+    ax.set_xticks(x)
+    label_map = {
+        'locally-learnt': f'Full',
+        'frozen-hidden': f'Frozen',
+        'fixed-feedback': f'Random\nFeedback',
+        'surrogate gradient': f'Surrogate\nGradient',
+        'backprop': f'ANN\n(SGD)'
+    }
+    tick_labels = [label_map.get(note, str(note).replace('-', ' ').title()) for note in group_order]
+    # ax.set_xticklabels(tick_labels, rotation=15, ha='center', rotation_mode='anchor')
+    ax.set_xticklabels(tick_labels, rotation=0, ha='center')
+    ax.set_ylabel('Best validation accuracy')
+    ax.tick_params(axis='both', labelsize=8)
+    # ax.tick_params(axis='x', pad=6)
+    
+    ax.set_ylim(y_min, y_max)
+    _sparse_grid(ax, axis='y')
+    
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor=_lighten('#555555'), label='Simulation'),
+        Patch(facecolor='#555555', label='Dynapse')
+    ]
+    ax.legend(handles=legend_elements, loc='upper left')
+    
     return fig
