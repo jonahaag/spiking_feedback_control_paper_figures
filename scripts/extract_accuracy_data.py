@@ -1,7 +1,7 @@
 """Convert raw per-run accuracy/target-error curves into simple long-format CSVs for plotting.
 
 Reads the memory-mapped .dat/.pkl run data via summarize_runs.load_run and writes one row per
-(regime, split, seed, chip, step) to data/<dataset>_accuracy.csv. Run from within scripts/:
+(regime, split, seed, chip, step) to data/dynapse/<dataset>_accuracy.csv. Run from within scripts/:
 
     python extract_accuracy_data.py
 """
@@ -23,7 +23,7 @@ DATASETS = {
     },
 }
 
-OUTPUT_DIR = '../data'
+OUTPUT_DIR = '../data/dynapse'
 
 
 def discover_runs(dataset_dir, regime):
