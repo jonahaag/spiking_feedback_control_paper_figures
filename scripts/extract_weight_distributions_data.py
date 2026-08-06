@@ -20,7 +20,7 @@ import pandas as pd
 
 from summarize_runs import _load_pickle
 
-OUTPUT_DIR = '../data'
+OUTPUT_DIR = '../data/dynapse'
 
 # dataset -> (run path, weight_type -> (initial_weights key, .dat filename), drop spurious batch axis)
 DATASETS = {

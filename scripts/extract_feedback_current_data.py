@@ -18,7 +18,7 @@ import pandas as pd
 from summarize_runs import _load_pickle
 
 RUN_PATH = '../dynapse_results/mnist1d/full/201175_0'
-OUTPUT_DIR = '../data'
+OUTPUT_DIR = '../data/dynapse'
 
 
 def _load_array(path, name):

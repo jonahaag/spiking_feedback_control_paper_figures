@@ -19,7 +19,7 @@ import pandas as pd
 from summarize_runs import _load_pickle
 
 RUN_DIR = '../dynapse_results/parallel_training/full/201285_{chip}'
-OUTPUT_DIR = '../data'
+OUTPUT_DIR = '../data/dynapse'
 CHIP_CHECKPOINTS = {
     0: [15],                        # -> training step 75000 (end), for the cross-chip comparison
     1: [15],                        # -> training step 75000 (end), for the cross-chip comparison

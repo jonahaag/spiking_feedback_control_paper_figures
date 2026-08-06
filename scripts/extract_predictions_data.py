@@ -24,7 +24,7 @@ from summarize_runs import _load_pickle
 from datagenerator import YinYangDataGenerator
 
 RUN_PATH = '../dynapse_results/parallel_training/full/201286_2'
-OUTPUT_DIR = '../data'
+OUTPUT_DIR = '../data/dynapse'
 CHECKPOINT = 8
 
 
