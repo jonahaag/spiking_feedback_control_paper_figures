@@ -15,11 +15,19 @@ import summarize_runs as sr
 DATASETS = {
     'mnist1d': {
         'dir': '../dynapse_results/mnist1d',
-        'frozen_skipped_initial_val': True,
+        # regime subdirectory name -> (output 'regime' label, skipped_initial_val)
+        'regimes': {
+            'frozen': ('frozen', True),
+            'full': ('full', False),
+            'fixed_random_feedback': ('fixed-feedback', False),
+        },
     },
     'yinyang': {
         'dir': '../dynapse_results/parallel_training',
-        'frozen_skipped_initial_val': False,
+        'regimes': {
+            'frozen': ('frozen', False),
+            'full': ('full', False),
+        },
     },
 }
 
@@ -35,18 +43,17 @@ def discover_runs(dataset_dir, regime):
     )
 
 
-def extract(dataset_dir, frozen_skipped_initial_val):
+def extract(dataset_dir, regimes):
     rows = []
-    for regime in ('frozen', 'full'):
-        skipped = frozen_skipped_initial_val if regime == 'frozen' else False
-        for path in discover_runs(dataset_dir, regime):
+    for subdir, (label, skipped) in regimes.items():
+        for path in discover_runs(dataset_dir, subdir):
             run = sr.load_run(path, skipped_initial_val=skipped)
             for split in ('train', 'val'):
                 for step, accuracy, target_error in zip(
                     run[split]['x'], run[split]['classification_accuracy'], run[split]['target_error']
                 ):
                     rows.append({
-                        'regime': regime,
+                        'regime': label,
                         'split': split,
                         'seed': run['seed'],
                         'chip': run['chip'],
@@ -60,7 +67,7 @@ def extract(dataset_dir, frozen_skipped_initial_val):
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     for dataset, cfg in DATASETS.items():
-        df = extract(cfg['dir'], cfg['frozen_skipped_initial_val'])
+        df = extract(cfg['dir'], cfg['regimes'])
         out_path = os.path.join(OUTPUT_DIR, f'{dataset}_accuracy.csv')
         df.to_csv(out_path, index=False)
         print(f"Wrote {out_path} ({len(df)} rows)")
