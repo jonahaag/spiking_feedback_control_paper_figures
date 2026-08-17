@@ -27,6 +27,7 @@ DATASETS = {
         'regimes': {
             'frozen': ('frozen', False),
             'full': ('full', False),
+            'fixed_random_feedback': ('fixed-feedback', False),
         },
     },
 }
