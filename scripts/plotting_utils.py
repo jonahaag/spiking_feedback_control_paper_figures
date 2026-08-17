@@ -28,6 +28,12 @@ CMAP_HIDDEN = LinearSegmentedColormap.from_list('hidden', [(1, 1, 1, 1), to_rgba
 
 REGIME_COLOR = {'full': COLOR_FULL, 'frozen': COLOR_FROZEN}
 REGIME_LABEL = {'full': 'Full', 'frozen': 'Frozen'}
+
+# Separate from REGIME_COLOR/REGIME_LABEL (used by plot_accuracy_over_steps, 3b) so the
+# fixed-feedback regime shows up in the per-chip bar plots (4b/4c) without also adding a curve
+# to the accuracy-over-steps figures.
+BAR_REGIME_COLOR = {'full': COLOR_FULL, 'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET}
+BAR_REGIME_LABEL = {'full': 'Full', 'frozen': 'Frozen', 'fixed-feedback': 'Random Feedback'}
 SPLIT_LABEL = {'train': 'training', 'val': 'validation'}
 SPLIT_LINE_ALPHA = {'train': 0.5, 'val': 1.0}
 TRAIN_FILL_ALPHA = 0.18
@@ -275,27 +281,28 @@ def compute_best_val(df, value_col, better):
 
 
 def plot_grouped_bars_by_chip(df):
-    """Best validation accuracy, Full vs. Frozen, grouped by chip.
+    """Best validation accuracy per regime, grouped by chip.
 
     Bar height = mean across seeds within that chip, error bar = std. Shows whether results are
-    consistent across chips.
+    consistent across chips. Only regimes present in ``df`` are plotted, in BAR_REGIME_COLOR order.
     """
     best = compute_best_val(df, 'accuracy', 'higher')
+    regimes = [r for r in BAR_REGIME_COLOR if r in best['regime'].unique()]
 
     latexify(width_fraction=0.6, base_font_size=9, height_ratio=0.7)
     fig, ax = plt.subplots(constrained_layout=True)
-    width = 0.38
+    width = 0.8 / len(regimes)
 
     values = sorted(best['chip'].unique())
     x = np.arange(len(values))
     stats = best.groupby(['regime', 'chip'])['accuracy'].agg(['mean', 'std']).reindex(
-        pd.MultiIndex.from_product([REGIME_COLOR, values], names=['regime', 'chip']))
+        pd.MultiIndex.from_product([regimes, values], names=['regime', 'chip']))
 
-    for regime, color in REGIME_COLOR.items():
+    offsets = (np.arange(len(regimes)) - (len(regimes) - 1) / 2) * width
+    for regime, offset in zip(regimes, offsets):
         s = stats.loc[regime]
-        offset = (-width / 2 if regime == 'frozen' else width / 2)
         ax.bar(x + offset, s['mean'], width, yerr=s['std'].fillna(0), capsize=3,
-              color=color, label=REGIME_LABEL[regime], error_kw={'elinewidth': 1})
+              color=BAR_REGIME_COLOR[regime], label=BAR_REGIME_LABEL[regime], error_kw={'elinewidth': 1})
 
     ax.set_xticks(x)
     ax.set_xticklabels([f'Chip {v}' for v in values])
