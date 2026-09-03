@@ -20,6 +20,7 @@ DATASETS = {
             'frozen': ('frozen', True),
             'full': ('full', False),
             'fixed_random_feedback': ('fixed-feedback', False),
+            'kp': ('kp', False),
         },
     },
     'yinyang': {

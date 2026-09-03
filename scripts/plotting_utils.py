@@ -18,6 +18,7 @@ COLOR_FROZEN = '#AA4499'      # purple -- frozen training regime (2b/3b, 4b/4c)
 COLOR_REFERENCE = '#999933'   # olive, reserved for reference/baseline lines
 COLOR_REFERENCE_2 = '#DDCC77' # sand, reserved for second reference/baseline lines
 
+COLOR_KP = '#CC6677'         # rose -- KP feedback regime (3c/4c)
 COLOR_TARGET = '#CC6677'      # rose (3f, reused for predicted-class 2f)
 COLOR_NONTARGET = '#44AA99'   # teal (3f, reused for predicted-class 2f)
 COLOR_HIDDEN = '#332288'      # indigo -- hidden features (2d/4d) and input-to-hidden weights (2e)
@@ -34,6 +35,13 @@ REGIME_LABEL = {'full': 'Full', 'frozen': 'Frozen'}
 # to the accuracy-over-steps figures.
 BAR_REGIME_COLOR = {'full': COLOR_FULL, 'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET}
 BAR_REGIME_LABEL = {'full': 'Full', 'frozen': 'Frozen', 'fixed-feedback': 'Random Feedback'}
+
+# mnist1d per-chip bars (4c): sorted frozen -> random feedback -> Rec-LRA -> KP, with the
+# 'full' regime relabelled 'Rec-LRA' and the KP feedback regime added as a fourth bar.
+MNIST1D_BAR_REGIME_COLOR = {'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET,
+                            'full': COLOR_FULL, 'kp': COLOR_KP}
+MNIST1D_BAR_REGIME_LABEL = {'frozen': 'Frozen', 'fixed-feedback': 'Random Feedback',
+                            'full': 'Rec-LRA', 'kp': 'KP'}
 SPLIT_LABEL = {'train': 'training', 'val': 'validation'}
 SPLIT_LINE_ALPHA = {'train': 0.5, 'val': 1.0}
 TRAIN_FILL_ALPHA = 0.18
@@ -280,14 +288,15 @@ def compute_best_val(df, value_col, better):
     return val.groupby(['regime', 'seed', 'chip'], as_index=False)[value_col].agg(agg)
 
 
-def plot_grouped_bars_by_chip(df):
+def plot_grouped_bars_by_chip(df, regime_color=BAR_REGIME_COLOR, regime_label=BAR_REGIME_LABEL):
     """Best validation accuracy per regime, grouped by chip.
 
     Bar height = mean across seeds within that chip, error bar = std. Shows whether results are
-    consistent across chips. Only regimes present in ``df`` are plotted, in BAR_REGIME_COLOR order.
+    consistent across chips. Only regimes present in ``df`` are plotted, in ``regime_color`` order
+    (pass ``MNIST1D_BAR_REGIME_COLOR``/``MNIST1D_BAR_REGIME_LABEL`` for the 4c ordering + KP bar).
     """
     best = compute_best_val(df, 'accuracy', 'higher')
-    regimes = [r for r in BAR_REGIME_COLOR if r in best['regime'].unique()]
+    regimes = [r for r in regime_color if r in best['regime'].unique()]
 
     latexify(width_fraction=0.6, base_font_size=9, height_ratio=0.7)
     fig, ax = plt.subplots(constrained_layout=True)
@@ -302,7 +311,7 @@ def plot_grouped_bars_by_chip(df):
     for regime, offset in zip(regimes, offsets):
         s = stats.loc[regime]
         ax.bar(x + offset, s['mean'], width, yerr=s['std'].fillna(0), capsize=3,
-              color=BAR_REGIME_COLOR[regime], label=BAR_REGIME_LABEL[regime], error_kw={'elinewidth': 1})
+              color=regime_color[regime], label=regime_label[regime], error_kw={'elinewidth': 1})
 
     ax.set_xticks(x)
     ax.set_xticklabels([f'Chip {v}' for v in values])
@@ -407,15 +416,22 @@ def plot_predictions(df, class_col='predicted_class', colors=CLASS_COLOR, input_
 
     return fig
 
-def plot_sim_vs_dynapse_bars(df_dynapse, df_sim, y_min=0.0, y_max=1.0, group_order=None):
+def plot_sim_vs_dynapse_bars(df_dynapse, df_sim, y_min=0.0, y_max=1.0, group_order=None,
+                             hide_sim_for=(), label_overrides=None):
     """Bar plot comparing Simulation vs. Dynapse for various methods.
 
     Expects df_sim to contain 'note' and 'test accuracy (Max)'
     Expects df_dynapse to contain 'regime' and 'accuracy' (processed via compute_best_val)
+
+    ``hide_sim_for`` lists notes whose simulation bar is suppressed (only the Dynapse bar is
+    drawn, centered) -- used by 3c to show hardware-only results for the on-chip regimes.
+    ``label_overrides`` is merged into the default tick-label map (e.g. {'locally-learnt':
+    'Rec-LRA'}).
     """
+    hide_sim_for = set(hide_sim_for)
     if group_order is None:
         group_order = ['locally-learnt', 'frozen-hidden', 'fixed-feedback', 'surrogate gradient', 'backprop']
-        
+
     # Process Dynapse
     best_dynapse = compute_best_val(df_dynapse, 'accuracy', 'higher')
     regime_map = {'full': 'locally-learnt', 'frozen': 'frozen-hidden'}
@@ -436,6 +452,7 @@ def plot_sim_vs_dynapse_bars(df_dynapse, df_sim, y_min=0.0, y_max=1.0, group_ord
         'locally-learnt': COLOR_FULL,
         'frozen-hidden': COLOR_FROZEN,
         'fixed-feedback': COLOR_NONTARGET,
+        'kp': COLOR_KP,
         'surrogate gradient': COLOR_HIDDEN_OUT,
         'backprop': COLOR_REFERENCE,
     }
@@ -456,26 +473,35 @@ def plot_sim_vs_dynapse_bars(df_dynapse, df_sim, y_min=0.0, y_max=1.0, group_ord
         
         c_dyn = method_color_map.get(note, COLOR_FULL)
         c_sim = _lighten(c_dyn)
-        
-        # If dynapse data is present, plot side-by-side
-        if pd.notna(d_mean) and d_mean > 0:
-            ax.bar(x[i] - width/2, s_mean, width, yerr=0 if pd.isna(s_std) else s_std, 
+
+        show_dyn = pd.notna(d_mean) and d_mean > 0
+        show_sim = pd.notna(s_mean) and note not in hide_sim_for
+
+        if show_dyn and show_sim:
+            # Both present -> side-by-side simulation / Dynapse bars.
+            ax.bar(x[i] - width/2, s_mean, width, yerr=0 if pd.isna(s_std) else s_std,
                    capsize=3, color=c_sim, error_kw={'elinewidth': 1})
-            ax.bar(x[i] + width/2, d_mean, width, yerr=0 if pd.isna(d_std) else d_std, 
+            ax.bar(x[i] + width/2, d_mean, width, yerr=0 if pd.isna(d_std) else d_std,
                    capsize=3, color=c_dyn, error_kw={'elinewidth': 1})
-        else:
-            # Center the bar if dynapse is missing
-            ax.bar(x[i], s_mean, width, yerr=0 if pd.isna(s_std) else s_std, 
+        elif show_dyn:
+            # Dynapse only (e.g. on-chip regimes in 3c) -> single centered bar.
+            ax.bar(x[i], d_mean, width, yerr=0 if pd.isna(d_std) else d_std,
+                   capsize=3, color=c_dyn, error_kw={'elinewidth': 1})
+        elif show_sim:
+            # Simulation only (surrogate gradient / backprop) -> single centered bar.
+            ax.bar(x[i], s_mean, width, yerr=0 if pd.isna(s_std) else s_std,
                    capsize=3, color=c_sim, error_kw={'elinewidth': 1})
 
     ax.set_xticks(x)
     label_map = {
-        'locally-learnt': f'Full',
-        'frozen-hidden': f'Frozen',
-        'fixed-feedback': f'Random\nFeedback',
-        'surrogate gradient': f'Surrogate\nGradient',
-        'backprop': f'ANN\n(SGD)'
+        'locally-learnt': 'Full',
+        'frozen-hidden': 'Frozen',
+        'fixed-feedback': 'Random\nFeedback',
+        'kp': 'KP',
+        'surrogate gradient': 'Surrogate\nGradient',
+        'backprop': 'ANN\n(SGD)'
     }
+    label_map.update(label_overrides or {})
     tick_labels = [label_map.get(note, str(note).replace('-', ' ').title()) for note in group_order]
     # ax.set_xticklabels(tick_labels, rotation=15, ha='center', rotation_mode='anchor')
     ax.set_xticklabels(tick_labels, rotation=0, ha='center')
