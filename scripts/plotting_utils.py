@@ -36,11 +36,12 @@ REGIME_LABEL = {'full': 'Full', 'frozen': 'Frozen'}
 BAR_REGIME_COLOR = {'full': COLOR_FULL, 'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET}
 BAR_REGIME_LABEL = {'full': 'Full', 'frozen': 'Frozen', 'fixed-feedback': 'Random Feedback'}
 
-# mnist1d per-chip bars (4c): sorted frozen -> random feedback -> Rec-LRA -> KP, with the
-# 'full' regime relabelled 'Rec-LRA' and the KP feedback regime added as a fourth bar.
+# mnist1d per-chip bars (4c): sorted frozen -> DFA -> Rec-LRA -> KP, with the 'full' regime
+# relabelled 'Rec-LRA', the fixed-random-feedback regime relabelled 'DFA', and the KP feedback
+# regime added as a fourth bar.
 MNIST1D_BAR_REGIME_COLOR = {'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET,
                             'full': COLOR_FULL, 'kp': COLOR_KP}
-MNIST1D_BAR_REGIME_LABEL = {'frozen': 'Frozen', 'fixed-feedback': 'Random Feedback',
+MNIST1D_BAR_REGIME_LABEL = {'frozen': 'Frozen', 'fixed-feedback': 'DFA',
                             'full': 'Rec-LRA', 'kp': 'KP'}
 SPLIT_LABEL = {'train': 'training', 'val': 'validation'}
 SPLIT_LINE_ALPHA = {'train': 0.5, 'val': 1.0}
