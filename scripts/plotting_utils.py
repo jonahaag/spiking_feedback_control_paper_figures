@@ -27,19 +27,13 @@ COLOR_FEEDBACK = '#882255'    # wine -- feedback weights (2e)
 
 CMAP_HIDDEN = LinearSegmentedColormap.from_list('hidden', [(1, 1, 1, 1), to_rgba(COLOR_HIDDEN)], N=100)  # (2d/4d)
 
-REGIME_COLOR = {'full': COLOR_FULL, 'frozen': COLOR_FROZEN}
-REGIME_LABEL = {'full': 'Full', 'frozen': 'Frozen'}
+# Training regimes, in the order they appear in every figure (legends, x positions). 'full' is
+# the learnt-feedback regime (Rec-LRA), 'fixed-feedback' fixed random feedback (DFA).
+REGIME_COLOR = {'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET, 'full': COLOR_FULL}
+REGIME_LABEL = {'frozen': 'Frozen', 'fixed-feedback': 'DFA', 'full': 'Rec-LRA'}
 
-# Separate from REGIME_COLOR/REGIME_LABEL (used by plot_accuracy_over_steps, 3b) so the
-# fixed-feedback regime shows up in the per-chip box plots (4b/4c) without also adding a curve
-# to the accuracy-over-steps figures.
-BAR_REGIME_COLOR = {'full': COLOR_FULL, 'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET}
-BAR_REGIME_LABEL = {'full': 'Full', 'frozen': 'Frozen', 'fixed-feedback': 'Random Feedback'}
-
-# mnist1d per-chip box plots (4c) and n_pop=2 curves: sorted frozen -> DFA -> Rec-LRA, with
-# the 'full' regime relabelled 'Rec-LRA' and the fixed-random-feedback regime relabelled 'DFA'.
-MNIST1D_BAR_REGIME_COLOR = {'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET, 'full': COLOR_FULL}
-MNIST1D_BAR_REGIME_LABEL = {'frozen': 'Frozen', 'fixed-feedback': 'DFA', 'full': 'Rec-LRA'}
+# Simulation runs label regimes by their wandb 'note'.
+NOTE_REGIME = {'frozen-hidden': 'frozen', 'fixed-feedback': 'fixed-feedback', 'locally-learnt': 'full'}
 SPLIT_LABEL = {'train': 'training', 'val': 'validation'}
 SPLIT_LINE_ALPHA = {'train': 0.5, 'val': 1.0}
 TRAIN_FILL_ALPHA = 0.18
@@ -101,10 +95,11 @@ def _with_chance_point(d, chance_level):
 
 
 def plot_accuracy_over_steps(agg, ax=None, reference_lines=None, chance_level=None,
-                             regime_color=REGIME_COLOR, regime_label=REGIME_LABEL):
+                             regimes=('frozen', 'full')):
     """Accuracy curves (center +/- band, typically from ``aggregate_mean_std``): color = regime.
     Training is a solid line with a shaded +/- band; validation is scattered markers only (mean,
-    no error bar/band).
+    no error bar/band). Only ``regimes`` are drawn (2b/3b: Frozen vs. Rec-LRA), in
+    ``REGIME_COLOR`` order.
 
     ``chance_level``, if given, prepends a step-0 point (untrained network) to both curves.
     """
@@ -112,14 +107,16 @@ def plot_accuracy_over_steps(agg, ax=None, reference_lines=None, chance_level=No
         latexify(width_fraction=0.6, base_font_size=9, height_ratio=0.7)
         _, ax = plt.subplots(constrained_layout=True)
 
-    for regime, color in regime_color.items():
+    for regime, color in REGIME_COLOR.items():
+        if regime not in regimes:
+            continue
         for split in ('train', 'val'):
             d = agg[(agg['regime'] == regime) & (agg['split'] == split)]
             if d.empty:
                 continue
             if chance_level is not None:
                 d = _with_chance_point(d, chance_level)
-            label = f"{regime_label[regime]} {SPLIT_LABEL[split]}"
+            label = f"{REGIME_LABEL[regime]} {SPLIT_LABEL[split]}"
             if split == 'val':
                 ax.scatter(d['step'], d['center'], color=color, s=18, linewidths=0,
                           alpha=SPLIT_LINE_ALPHA[split], label=label, zorder=3)
@@ -306,17 +303,16 @@ def _boxplot(ax, data, positions, width, color):
     )
 
 
-def plot_grouped_box_by_chip(df, regime_color=BAR_REGIME_COLOR, regime_label=BAR_REGIME_LABEL):
+def plot_grouped_box_by_chip(df, legend_loc='best'):
     """Best validation accuracy per regime, grouped by chip, as box plots over seeds.
 
     Shows whether results are consistent across chips. Only regimes present in ``df`` are plotted,
-    in ``regime_color`` order (pass ``MNIST1D_BAR_REGIME_COLOR``/``MNIST1D_BAR_REGIME_LABEL`` for
-    the 4c ordering/labels).
+    in ``REGIME_COLOR`` order.
     """
     from matplotlib.patches import Patch
 
     best = compute_best_val(df, 'accuracy', 'higher')
-    regimes = [r for r in regime_color if r in best['regime'].unique()]
+    regimes = [r for r in REGIME_COLOR if r in best['regime'].unique()]
 
     latexify(width_fraction=0.6, base_font_size=9, height_ratio=0.7)
     fig, ax = plt.subplots(constrained_layout=True)
@@ -333,7 +329,7 @@ def plot_grouped_box_by_chip(df, regime_color=BAR_REGIME_COLOR, regime_label=BAR
                 data.append(d)
                 positions.append(x[i] + offset)
         if data:
-            _boxplot(ax, data, positions, width * 0.8, regime_color[regime])
+            _boxplot(ax, data, positions, width * 0.8, REGIME_COLOR[regime])
 
     ax.set_xticks(x)
     ax.set_xticklabels([f'Chip {v}' for v in values])
@@ -341,30 +337,28 @@ def plot_grouped_box_by_chip(df, regime_color=BAR_REGIME_COLOR, regime_label=BAR
     span = best['accuracy'].max() - best['accuracy'].min()
     ax.set_ylim(max(0, best['accuracy'].min() - 0.3 * span), best['accuracy'].max() + 0.3 * span)
     _sparse_grid(ax, axis='y')
-    ax.legend(handles=[Patch(facecolor=regime_color[r], label=regime_label[r]) for r in regimes])
+    ax.legend(handles=[Patch(facecolor=REGIME_COLOR[r], label=REGIME_LABEL[r]) for r in regimes], loc=legend_loc)
 
     return fig
 
 
 # --- population size (n_pop=2) -------------------------------------------------------------------
 
-def plot_population_accuracy_over_steps(df, n_pop, chance_level=0.1, regime_color=MNIST1D_BAR_REGIME_COLOR,
-                                        regime_label=MNIST1D_BAR_REGIME_LABEL):
+def plot_population_accuracy_over_steps(df, n_pop, chance_level=0.1):
     """3b-style accuracy over training for a single population size: training line +/- band,
     validation markers, and the mean test accuracy marked at the end of training (no error bar).
     """
     d = df[df['n_pop'] == n_pop]
     agg = aggregate_mean_std(d[d['split'] != 'test'])
-    regime_color = {r: c for r, c in regime_color.items() if r in agg['regime'].unique()}
-    ax = plot_accuracy_over_steps(agg, chance_level=chance_level, regime_color=regime_color,
-                                  regime_label=regime_label)
+    regimes = [r for r in REGIME_COLOR if r in agg['regime'].unique()]
+    ax = plot_accuracy_over_steps(agg, chance_level=chance_level, regimes=regimes)
 
     test = d[d['split'] == 'test'].groupby('regime').agg(step=('step', 'max'), accuracy=('accuracy', 'mean'))
-    for regime, color in regime_color.items():
+    for regime in regimes:
         if regime in test.index:
             t = test.loc[regime]
-            ax.scatter(t['step'], t['accuracy'], color=color, marker='D', s=24, edgecolors='black',
-                       linewidths=0.6, zorder=4, label=f"{regime_label[regime]} test")
+            ax.scatter(t['step'], t['accuracy'], color=REGIME_COLOR[regime], marker='D', s=24,
+                       edgecolors='black', linewidths=0.6, zorder=4, label=f"{REGIME_LABEL[regime]} test")
     ax.legend()
     return ax.figure
 
@@ -462,27 +456,26 @@ def plot_predictions(df, class_col='predicted_class', colors=CLASS_COLOR, input_
     return fig
 
 def plot_sim_vs_dynapse_box_plots(df_dynapse, df_sim, y_min=0.0, y_max=1.0, group_order=None,
-                                  hide_sim_for=(), label_overrides=None, legend_loc='upper left'):
+                                  hide_sim_for=(), legend_loc='upper left'):
     """Box plot comparing Simulation vs. Dynapse for various methods (2c/3c).
 
     Expects df_sim to contain 'note' and 'test accuracy (Max)'
     Expects df_dynapse to contain 'regime' and 'accuracy' (processed via compute_best_val)
 
     ``hide_sim_for`` lists notes whose simulation box is suppressed (only the Dynapse box is
-    drawn, centered). ``label_overrides`` is merged into the default tick-label map (e.g.
-    {'locally-learnt': 'Rec-LRA'}).
+    drawn, centered). Training regimes use the shared ``REGIME_COLOR``/``REGIME_LABEL``.
     """
     from matplotlib.patches import Patch
 
     hide_sim_for = set(hide_sim_for)
     if group_order is None:
-        group_order = ['locally-learnt', 'frozen-hidden', 'fixed-feedback', 'surrogate gradient', 'backprop']
+        group_order = ['frozen-hidden', 'fixed-feedback', 'locally-learnt', 'surrogate gradient', 'backprop']
 
     # Process Dynapse
     best_dynapse = compute_best_val(df_dynapse, 'accuracy', 'higher')
-    regime_map = {'full': 'locally-learnt', 'frozen': 'frozen-hidden'}
+    regime_note = {r: n for n, r in NOTE_REGIME.items()}
     if 'note' not in best_dynapse.columns:
-        best_dynapse['note'] = best_dynapse['regime'].map(regime_map).fillna(best_dynapse['regime'])
+        best_dynapse['note'] = best_dynapse['regime'].map(regime_note).fillna(best_dynapse['regime'])
 
     # Style matching plot_grouped_box_by_chip
     latexify(width_fraction=0.6, base_font_size=9, height_ratio=0.7)
@@ -491,9 +484,7 @@ def plot_sim_vs_dynapse_box_plots(df_dynapse, df_sim, y_min=0.0, y_max=1.0, grou
 
     # Method color mapping using Paul Tol palette defined at top of file
     method_color_map = {
-        'locally-learnt': COLOR_FULL,
-        'frozen-hidden': COLOR_FROZEN,
-        'fixed-feedback': COLOR_NONTARGET,
+        **{n: REGIME_COLOR[r] for n, r in NOTE_REGIME.items()},
         'kp': COLOR_KP,
         'surrogate gradient': COLOR_HIDDEN_OUT,
         'backprop': COLOR_REFERENCE,
@@ -522,14 +513,11 @@ def plot_sim_vs_dynapse_box_plots(df_dynapse, df_sim, y_min=0.0, y_max=1.0, grou
 
     ax.set_xticks(x)
     label_map = {
-        'locally-learnt': 'Full',
-        'frozen-hidden': 'Frozen',
-        'fixed-feedback': 'Random\nFeedback',
+        **{n: REGIME_LABEL[r] for n, r in NOTE_REGIME.items()},
         'kp': 'KP',
         'surrogate gradient': 'Surrogate\nGradient',
         'backprop': 'ANN\n(SGD)'
     }
-    label_map.update(label_overrides or {})
     tick_labels = [label_map.get(note, str(note).replace('-', ' ').title()) for note in group_order]
     ax.set_xticklabels(tick_labels, rotation=0, ha='center')
     ax.set_ylabel('Best validation accuracy')
