@@ -18,7 +18,7 @@ COLOR_FROZEN = '#AA4499'      # purple -- frozen training regime (2b/3b, 4b/4c)
 COLOR_REFERENCE = '#999933'   # olive, reserved for reference/baseline lines
 COLOR_REFERENCE_2 = '#DDCC77' # sand, reserved for second reference/baseline lines
 
-COLOR_KP = '#CC6677'         # rose -- KP feedback regime (3c/4c)
+COLOR_KP = '#CC6677'          # rose -- KP feedback regime (currently not plotted)
 COLOR_TARGET = '#CC6677'      # rose (3f, reused for predicted-class 2f)
 COLOR_NONTARGET = '#44AA99'   # teal (3f, reused for predicted-class 2f)
 COLOR_HIDDEN = '#332288'      # indigo -- hidden features (2d/4d) and input-to-hidden weights (2e)
@@ -36,13 +36,10 @@ REGIME_LABEL = {'full': 'Full', 'frozen': 'Frozen'}
 BAR_REGIME_COLOR = {'full': COLOR_FULL, 'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET}
 BAR_REGIME_LABEL = {'full': 'Full', 'frozen': 'Frozen', 'fixed-feedback': 'Random Feedback'}
 
-# mnist1d per-chip bars (4c): sorted frozen -> DFA -> Rec-LRA -> KP, with the 'full' regime
-# relabelled 'Rec-LRA', the fixed-random-feedback regime relabelled 'DFA', and the KP feedback
-# regime added as a fourth bar.
-MNIST1D_BAR_REGIME_COLOR = {'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET,
-                            'full': COLOR_FULL, 'kp': COLOR_KP}
-MNIST1D_BAR_REGIME_LABEL = {'frozen': 'Frozen', 'fixed-feedback': 'DFA',
-                            'full': 'Rec-LRA', 'kp': 'KP'}
+# mnist1d per-chip bars (4c) and n_pop=2 curves: sorted frozen -> DFA -> Rec-LRA, with
+# the 'full' regime relabelled 'Rec-LRA' and the fixed-random-feedback regime relabelled 'DFA'.
+MNIST1D_BAR_REGIME_COLOR = {'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET, 'full': COLOR_FULL}
+MNIST1D_BAR_REGIME_LABEL = {'frozen': 'Frozen', 'fixed-feedback': 'DFA', 'full': 'Rec-LRA'}
 SPLIT_LABEL = {'train': 'training', 'val': 'validation'}
 SPLIT_LINE_ALPHA = {'train': 0.5, 'val': 1.0}
 TRAIN_FILL_ALPHA = 0.18
@@ -103,7 +100,8 @@ def _with_chance_point(d, chance_level):
     return pd.concat([anchor, d], ignore_index=True).sort_values('step')
 
 
-def plot_accuracy_over_steps(agg, ax=None, reference_lines=None, chance_level=None):
+def plot_accuracy_over_steps(agg, ax=None, reference_lines=None, chance_level=None,
+                             regime_color=REGIME_COLOR, regime_label=REGIME_LABEL):
     """Accuracy curves (center +/- band, typically from ``aggregate_mean_std``): color = regime.
     Training is a solid line with a shaded +/- band; validation is scattered markers only (mean,
     no error bar/band).
@@ -114,14 +112,14 @@ def plot_accuracy_over_steps(agg, ax=None, reference_lines=None, chance_level=No
         latexify(width_fraction=0.6, base_font_size=9, height_ratio=0.7)
         _, ax = plt.subplots(constrained_layout=True)
 
-    for regime, color in REGIME_COLOR.items():
+    for regime, color in regime_color.items():
         for split in ('train', 'val'):
             d = agg[(agg['regime'] == regime) & (agg['split'] == split)]
             if d.empty:
                 continue
             if chance_level is not None:
                 d = _with_chance_point(d, chance_level)
-            label = f"{REGIME_LABEL[regime]} {SPLIT_LABEL[split]}"
+            label = f"{regime_label[regime]} {SPLIT_LABEL[split]}"
             if split == 'val':
                 ax.scatter(d['step'], d['center'], color=color, s=18, linewidths=0,
                           alpha=SPLIT_LINE_ALPHA[split], label=label, zorder=3)
@@ -282,11 +280,11 @@ def plot_hidden_feature_maps_across_chips(df, chips, init_chip, init_step, final
 
 # --- grouped bar charts (4b/4c) -------------------------------------------------------------------
 
-def compute_best_val(df, value_col, better):
-    """Best validation value (max if better='higher', min if better='lower') per run."""
+def compute_best_val(df, value_col, better, by=('regime', 'seed', 'chip')):
+    """Best validation value (max if better='higher', min if better='lower') per run (``by``)."""
     val = df[df['split'] == 'val']
     agg = 'max' if better == 'higher' else 'min'
-    return val.groupby(['regime', 'seed', 'chip'], as_index=False)[value_col].agg(agg)
+    return val.groupby(list(by), as_index=False)[value_col].agg(agg)
 
 
 def plot_grouped_bars_by_chip(df, regime_color=BAR_REGIME_COLOR, regime_label=BAR_REGIME_LABEL):
@@ -294,7 +292,7 @@ def plot_grouped_bars_by_chip(df, regime_color=BAR_REGIME_COLOR, regime_label=BA
 
     Bar height = mean across seeds within that chip, error bar = std. Shows whether results are
     consistent across chips. Only regimes present in ``df`` are plotted, in ``regime_color`` order
-    (pass ``MNIST1D_BAR_REGIME_COLOR``/``MNIST1D_BAR_REGIME_LABEL`` for the 4c ordering + KP bar).
+    (pass ``MNIST1D_BAR_REGIME_COLOR``/``MNIST1D_BAR_REGIME_LABEL`` for the 4c ordering/labels).
     """
     best = compute_best_val(df, 'accuracy', 'higher')
     regimes = [r for r in regime_color if r in best['regime'].unique()]
@@ -325,7 +323,30 @@ def plot_grouped_bars_by_chip(df, regime_color=BAR_REGIME_COLOR, regime_label=BA
     return fig
 
 
-# --- weight distributions (2e/3d) -----------------------------------------------------------------
+# --- population size (n_pop=2) -------------------------------------------------------------------
+
+def plot_population_accuracy_over_steps(df, n_pop, chance_level=0.1, regime_color=MNIST1D_BAR_REGIME_COLOR,
+                                        regime_label=MNIST1D_BAR_REGIME_LABEL):
+    """3b-style accuracy over training for a single population size: training line +/- band,
+    validation markers, and the mean test accuracy marked at the end of training (no error bar).
+    """
+    d = df[df['n_pop'] == n_pop]
+    agg = aggregate_mean_std(d[d['split'] != 'test'])
+    regime_color = {r: c for r, c in regime_color.items() if r in agg['regime'].unique()}
+    ax = plot_accuracy_over_steps(agg, chance_level=chance_level, regime_color=regime_color,
+                                  regime_label=regime_label)
+
+    test = d[d['split'] == 'test'].groupby('regime').agg(step=('step', 'max'), accuracy=('accuracy', 'mean'))
+    for regime, color in regime_color.items():
+        if regime in test.index:
+            t = test.loc[regime]
+            ax.scatter(t['step'], t['accuracy'], color=color, marker='D', s=24, edgecolors='black',
+                       linewidths=0.6, zorder=4, label=f"{regime_label[regime]} test")
+    ax.legend()
+    return ax.figure
+
+
+# --- weight distributions (2e/3d)-----------------------------------------------------------------
 
 # Reused across datasets: color/title assigned by subplot position (earliest -> latest weight
 # matrix), not by semantic weight name, so different weight-graph shapes (e.g. yin-yang's single

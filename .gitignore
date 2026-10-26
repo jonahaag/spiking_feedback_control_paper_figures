@@ -3,3 +3,6 @@ __pycache__/
 .venv/
 .DS_Store
 .ipynb_checkpoints/
+
+# mnist1d population-experiment raw runs are kept locally only; extracted CSVs live in data/dynapse/
+dynapse_results/mnist1d/population_experiments/*/
