@@ -26,6 +26,8 @@ import re
 import glob
 import pickle
 import warnings
+import json
+
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -36,27 +38,27 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------------------------
 # List the result directories (one per run) for each training regime.
 FROZEN_PATHS = [
-    '../results/parallel_training/frozen/201285_0',
-    '../results/parallel_training/frozen/201285_1',
-    '../results/parallel_training/frozen/201285_2',
-    '../results/parallel_training/frozen/201286_0',
-    '../results/parallel_training/frozen/201286_1',
-    '../results/parallel_training/frozen/201286_2',
+    '../dynapse_results/parallel_training/frozen/201285_0',
+    '../dynapse_results/parallel_training/frozen/201285_1',
+    '../dynapse_results/parallel_training/frozen/201285_2',
+    '../dynapse_results/parallel_training/frozen/201286_0',
+    '../dynapse_results/parallel_training/frozen/201286_1',
+    '../dynapse_results/parallel_training/frozen/201286_2',
     # '../results/parallel-frozen-feedback-control-dynapse/.../<timestamp>/<seed>_<chip>/',
 ]
 FULL_PATHS = [
-    '../results/parallel_training/full/201285_0',
-    '../results/parallel_training/full/201285_1',
-    '../results/parallel_training/full/201285_2',
-    '../results/parallel_training/full/201286_0',
-    '../results/parallel_training/full/201286_1',
-    '../results/parallel_training/full/201286_2',
-    '../results/parallel_training/full/201287_0',
-    '../results/parallel_training/full/201287_1',
-    '../results/parallel_training/full/201287_2',
-    '../results/parallel_training/full/201288_0',
-    '../results/parallel_training/full/201288_1',
-    '../results/parallel_training/full/201288_2',
+    '../dynapse_results/parallel_training/full/201285_0',
+    '../dynapse_results/parallel_training/full/201285_1',
+    '../dynapse_results/parallel_training/full/201285_2',
+    '../dynapse_results/parallel_training/full/201286_0',
+    '../dynapse_results/parallel_training/full/201286_1',
+    '../dynapse_results/parallel_training/full/201286_2',
+    '../dynapse_results/parallel_training/full/201287_0',
+    '../dynapse_results/parallel_training/full/201287_1',
+    '../dynapse_results/parallel_training/full/201287_2',
+    '../dynapse_results/parallel_training/full/201288_0',
+    '../dynapse_results/parallel_training/full/201288_1',
+    '../dynapse_results/parallel_training/full/201288_2',
     # '../results/parallel-feedback-control-dynapse/.../<timestamp>/<seed>_<chip>/',
 ]
 
@@ -660,6 +662,34 @@ def plot_grouped_bars(grouped_frozen_stats, grouped_full_stats, key_label, savep
     return fig
 
 
+def export_for_typst(full_agg, frozen_agg, filepath="data.json"):
+    """Export aggregated training and validation accuracy for both regimes to JSON."""
+    
+    def extract_curves(agg):
+        if agg is None:
+            return {"train": [], "val": []}
+        acc = agg['classification_accuracy']
+        return {
+            "train": [
+                [float(x), float(m), float(s)] 
+                for x, m, s in zip(acc['train']['x'], acc['train']['mean'], acc['train']['std'])
+            ],
+            "val": [
+                [float(x), float(m), float(s)] 
+                for x, m, s in zip(acc['val']['x'], acc['val']['mean'], acc['val']['std'])
+            ]
+        }
+
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)
+    
+    with open(filepath, 'w') as f:
+        json.dump({
+            "full": extract_curves(full_agg),
+            "frozen": extract_curves(frozen_agg)
+        }, f)
+
+
 # ---------------------------------------------------------------------------
 # Top-level driver.
 # ---------------------------------------------------------------------------
@@ -683,6 +713,10 @@ def summarize(frozen_paths, full_paths, rolling_window=ROLLING_WINDOW,
     frozen_stats = compute_stats(frozen_runs)
     full_stats = compute_stats(full_runs)
     improvements = compute_improvements(frozen_runs, full_runs)
+
+    if frozen_agg is not None and full_agg is not None:
+        # This will save data.json in the same folder as your plots
+        export_for_typst(full_agg, frozen_agg, filepath=os.path.join(output_dir, "dynapse_training_curves.json"))
 
     print_table(frozen_stats, full_stats, improvements, frozen_runs, full_runs)
 

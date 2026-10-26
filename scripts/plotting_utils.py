@@ -323,6 +323,62 @@ def plot_grouped_bars_by_chip(df, regime_color=BAR_REGIME_COLOR, regime_label=BA
     return fig
 
 
+def plot_grouped_box_by_chip(df):
+    """Best validation accuracy, Full vs. Frozen, grouped by chip, using box plots.
+
+    Shows whether results are consistent across chips.
+    """
+    best = compute_best_val(df, 'accuracy', 'higher')
+
+    latexify(width_fraction=0.6, base_font_size=9, height_ratio=0.7)
+    fig, ax = plt.subplots(constrained_layout=True)
+    width = 0.38
+
+    values = sorted(best['chip'].unique())
+    x = np.arange(len(values))
+
+    from matplotlib.patches import Patch
+    legend_handles = []
+
+    for regime, color in REGIME_COLOR.items():
+        offset = (-width / 2 if regime == 'frozen' else width / 2)
+        
+        data_list = []
+        positions = []
+        for i, chip_val in enumerate(values):
+            d = best[(best['regime'] == regime) & (best['chip'] == chip_val)]['accuracy'].dropna().values
+            if len(d) > 0:
+                data_list.append(d)
+                positions.append(x[i] + offset)
+        
+        if data_list:
+            bp = ax.boxplot(
+                data_list,
+                positions=positions,
+                widths=width*0.8,
+                patch_artist=True,
+                boxprops=dict(facecolor=color, color=color),
+                medianprops=dict(color='black'),
+                whiskerprops=dict(color=color),
+                capprops=dict(color=color),
+                flierprops=dict(marker='o', markerfacecolor=color, markeredgecolor=color, markersize=2)
+            )
+            # Use Patch to have a reliable legend entry color
+            legend_handles.append(Patch(facecolor=color, label=REGIME_LABEL[regime]))
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([f'Chip {v}' for v in values])
+    ax.set_ylabel('Best validation accuracy')
+    span = best['accuracy'].max() - best['accuracy'].min()
+    ax.set_ylim(max(0, best['accuracy'].min() - 0.3 * span), best['accuracy'].max() + 0.3 * span)
+    _sparse_grid(ax, axis='y')
+    
+    if legend_handles:
+        ax.legend(handles=legend_handles)
+
+    return fig
+
+
 # --- population size (n_pop=2) -------------------------------------------------------------------
 
 def plot_population_accuracy_over_steps(df, n_pop, chance_level=0.1, regime_color=MNIST1D_BAR_REGIME_COLOR,
@@ -346,7 +402,7 @@ def plot_population_accuracy_over_steps(df, n_pop, chance_level=0.1, regime_colo
     return ax.figure
 
 
-# --- weight distributions (2e/3d)-----------------------------------------------------------------
+# --- weight distributions (2e/3d) -----------------------------------------------------------------
 
 # Reused across datasets: color/title assigned by subplot position (earliest -> latest weight
 # matrix), not by semantic weight name, so different weight-graph shapes (e.g. yin-yang's single
@@ -530,6 +586,100 @@ def plot_sim_vs_dynapse_bars(df_dynapse, df_sim, y_min=0.0, y_max=1.0, group_ord
     ax.set_ylabel('Best validation accuracy')
     ax.tick_params(axis='both', labelsize=8)
     # ax.tick_params(axis='x', pad=6)
+    
+    ax.set_ylim(y_min, y_max)
+    _sparse_grid(ax, axis='y')
+    
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor=_lighten('#555555'), label='Simulation'),
+        Patch(facecolor='#555555', label='Dynapse')
+    ]
+    ax.legend(handles=legend_elements, loc='upper left')
+    
+    return fig
+
+def plot_sim_vs_dynapse_box_plots(df_dynapse, df_sim, y_min=0.0, y_max=1.0, group_order=None):
+    """Box plot comparing Simulation vs. Dynapse for various methods.
+
+    Expects df_sim to contain 'note' and 'test accuracy (Max)'
+    Expects df_dynapse to contain 'regime' and 'accuracy' (processed via compute_best_val)
+    """
+    if group_order is None:
+        group_order = ['locally-learnt', 'frozen-hidden', 'fixed-feedback', 'surrogate gradient', 'backprop']
+        
+    # Process Dynapse
+    best_dynapse = compute_best_val(df_dynapse, 'accuracy', 'higher')
+    regime_map = {'full': 'locally-learnt', 'frozen': 'frozen-hidden'}
+    if 'note' not in best_dynapse.columns:
+        best_dynapse['note'] = best_dynapse['regime'].map(regime_map).fillna(best_dynapse['regime'])
+    
+    # Style matching plot_grouped_bars_by_chip exactly
+    latexify(width_fraction=0.6, base_font_size=9, height_ratio=0.7)
+    fig, ax = plt.subplots(constrained_layout=True)
+    width = 0.38
+    
+    # Method color mapping using Paul Tol palette defined at top of file
+    method_color_map = {
+        'locally-learnt': COLOR_FULL,
+        'frozen-hidden': COLOR_FROZEN,
+        'fixed-feedback': COLOR_NONTARGET,
+        'surrogate gradient': COLOR_HIDDEN_OUT,
+        'backprop': COLOR_REFERENCE,
+    }
+    
+    def _lighten(color_hex, factor=0.45):
+        from matplotlib.colors import to_rgb, to_hex
+        rgb = np.array(to_rgb(color_hex))
+        return to_hex((1 - factor) * rgb + factor * 1.0)
+    
+    x = np.arange(len(group_order))
+    
+    for i in range(len(x)):
+        note = group_order[i]
+        
+        # Get data
+        d_data = best_dynapse[best_dynapse['note'] == note]['accuracy'].dropna().values
+        s_data = df_sim[df_sim['note'] == note]['test accuracy (Max)'].dropna().values
+        
+        c_dyn = method_color_map.get(note, COLOR_FULL)
+        c_sim = _lighten(c_dyn)
+        
+        def _plot_box(data, pos, color):
+            ax.boxplot(
+                [data], 
+                positions=[pos], 
+                widths=width*0.8, 
+                patch_artist=True,
+                boxprops=dict(facecolor=color, color=color),
+                medianprops=dict(color='black'),
+                whiskerprops=dict(color=color),
+                capprops=dict(color=color),
+                flierprops=dict(marker='o', markerfacecolor=color, markeredgecolor=color, markersize=2)
+            )
+
+        # If dynapse data is present, plot side-by-side
+        if len(d_data) > 0:
+            if len(s_data) > 0:
+                _plot_box(s_data, x[i] - width/2, c_sim)
+            _plot_box(d_data, x[i] + width/2, c_dyn)
+        else:
+            # Center the bar if dynapse is missing
+            if len(s_data) > 0:
+                _plot_box(s_data, x[i], c_sim)
+
+    ax.set_xticks(x)
+    label_map = {
+        'locally-learnt': f'Full',
+        'frozen-hidden': f'Frozen',
+        'fixed-feedback': f'Random\nFeedback',
+        'surrogate gradient': f'Surrogate\nGradient',
+        'backprop': f'ANN\n(SGD)'
+    }
+    tick_labels = [label_map.get(note, str(note).replace('-', ' ').title()) for note in group_order]
+    ax.set_xticklabels(tick_labels, rotation=0, ha='center')
+    ax.set_ylabel('Best validation accuracy')
+    ax.tick_params(axis='both', labelsize=8)
     
     ax.set_ylim(y_min, y_max)
     _sparse_grid(ax, axis='y')
