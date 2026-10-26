@@ -24,7 +24,7 @@ DATASETS = {
         },
     },
     'yinyang': {
-        'dir': '../dynapse_results/parallel_training',
+        'dir': '../dynapse_results/yinyang',
         'regimes': {
             'frozen': ('frozen', False),
             'full': ('full', False),

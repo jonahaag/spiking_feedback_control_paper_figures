@@ -1,6 +1,6 @@
 """Convert hidden-layer/input validation arrays into a simple wide-format CSV.
 
-dynapse_results/parallel_training/full/201285_<chip>/ has val_hidden.dat and
+dynapse_results/yinyang/full/201285_<chip>/ has val_hidden.dat and
 val_measured_input.dat: per-validation-checkpoint, per-sample, per-population-copy hidden-layer
 firing rate and measured input rate (shape recorded in validationlog.pkl -- correct, no reshape
 workaround needed). Of the 16 validation checkpoints (0 = untrained network, 15 = end of
@@ -18,7 +18,7 @@ import pandas as pd
 
 from summarize_runs import _load_pickle
 
-RUN_DIR = '../dynapse_results/parallel_training/full/201285_{chip}'
+RUN_DIR = '../dynapse_results/yinyang/full/201285_{chip}'
 OUTPUT_DIR = '../data/dynapse'
 CHIP_CHECKPOINTS = {
     0: [15],                        # -> training step 75000 (end), for the cross-chip comparison

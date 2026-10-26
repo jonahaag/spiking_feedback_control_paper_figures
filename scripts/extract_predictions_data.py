@@ -1,6 +1,6 @@
 """Convert output validation arrays for one checkpoint into a simple predictions CSV.
 
-dynapse_results/parallel_training/full/201286_2/ has val_outputs.dat: per-validation-checkpoint,
+dynapse_results/yinyang/full/201286_2/ has val_outputs.dat: per-validation-checkpoint,
 per-sample, per-population-copy output firing rate (shape recorded in validationlog.pkl --
 correct, no reshape workaround needed). For CHECKPOINT (validation checkpoint index, 0-based),
 this averages over the population copies and picks the predicted class per sample as the output
@@ -23,7 +23,7 @@ import pandas as pd
 from summarize_runs import _load_pickle
 from datagenerator import YinYangDataGenerator
 
-RUN_PATH = '../dynapse_results/parallel_training/full/201286_2'
+RUN_PATH = '../dynapse_results/yinyang/full/201286_2'
 OUTPUT_DIR = '../data/dynapse'
 CHECKPOINT = 8
 

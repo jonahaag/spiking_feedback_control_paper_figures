@@ -1,7 +1,7 @@
 """Convert weight snapshots for one run per dataset into simple long-format CSVs of individual
 weight values.
 
-Both dynapse_results/parallel_training/full/201285_0/ (yin-yang) and
+Both dynapse_results/yinyang/full/201285_0/ (yin-yang) and
 dynapse_results/mnist1d/full/201175_0/ (mnist1d) have per-batch weight snapshots for their forward
 (and, for yin-yang, feedback) weight matrices. The mnist1d files have a known bug: the shape
 recorded in trainlog.pkl includes a spurious batch_size axis that doesn't match the actual file
@@ -25,7 +25,7 @@ OUTPUT_DIR = '../data/dynapse'
 # dataset -> (run path, weight_type -> (initial_weights key, .dat filename), drop spurious batch axis)
 DATASETS = {
     'yinyang': {
-        'run_path': '../dynapse_results/parallel_training/full/201285_0',
+        'run_path': '../dynapse_results/yinyang/full/201285_0',
         'weights': {
             'in_hidden': ('in_hidden', 'weights_in_hidden_fine.dat'),
             'hidden_out': ('hidden_out', 'weights_hidden_out_fine.dat'),
