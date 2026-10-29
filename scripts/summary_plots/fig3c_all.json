@@ -1,0 +1,66 @@
+{
+    "simulation": {
+        "frozen-hidden": {
+            "accuracy_mean": 0.7272086466165414,
+            "accuracy_std": 0.06596089761298937,
+            "error_mean": 11.889802631578947,
+            "error_std": 1.513287791590163
+        },
+        "locally-learnt": {
+            "accuracy_mean": 0.7463727678571429,
+            "accuracy_std": 0.0483630764109757,
+            "error_mean": 11.969735765457154,
+            "error_std": 1.844318290624239
+        },
+        "fixed-feedback": {
+            "accuracy_mean": 0.7335379464285714,
+            "accuracy_std": 0.07278496828634014,
+            "error_mean": 14.697135305404663,
+            "error_std": 8.531007138125139
+        },
+        "surrogate gradient": {
+            "accuracy_mean": 0.0,
+            "accuracy_std": 0.0,
+            "error_mean": 0.0,
+            "error_std": 0.0
+        },
+        "backprop": {
+            "accuracy_mean": 0.8301339285714286,
+            "accuracy_std": 0.0192173179312846,
+            "error_mean": 0.0,
+            "error_std": 0.0
+        }
+    },
+    "dynapse": {
+        "frozen-hidden": {
+            "accuracy_mean": 0.6717333333333332,
+            "accuracy_std": 0.04173322683692484,
+            "error_mean": 0.0,
+            "error_std": 0.0
+        },
+        "locally-learnt": {
+            "accuracy_mean": 0.7186666666666668,
+            "accuracy_std": 0.013801771222886162,
+            "error_mean": 10.684280555555555,
+            "error_std": 0.24042173616196938
+        },
+        "fixed-feedback": {
+            "accuracy_mean": 0.0,
+            "accuracy_std": 0.0,
+            "error_mean": 0.0,
+            "error_std": 0.0
+        },
+        "surrogate gradient": {
+            "accuracy_mean": 0.0,
+            "accuracy_std": 0.0,
+            "error_mean": 0.0,
+            "error_std": 0.0
+        },
+        "backprop": {
+            "accuracy_mean": 0.0,
+            "accuracy_std": 0.0,
+            "error_mean": 0.0,
+            "error_std": 0.0
+        }
+    }
+}

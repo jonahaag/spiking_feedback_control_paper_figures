@@ -299,7 +299,7 @@ def plot_grouped_bars_by_chip(df):
 
     ax.set_xticks(x)
     ax.set_xticklabels([f'Chip {v}' for v in values])
-    ax.set_ylabel('Best validation accuracy')
+    ax.set_ylabel('Test accuracy')
     span = best['accuracy'].max() - best['accuracy'].min()
     ax.set_ylim(max(0, best['accuracy'].min() - 0.3 * span), best['accuracy'].max() + 0.3 * span)
     _sparse_grid(ax, axis='y')
@@ -353,7 +353,7 @@ def plot_grouped_box_by_chip(df):
 
     ax.set_xticks(x)
     ax.set_xticklabels([f'Chip {v}' for v in values])
-    ax.set_ylabel('Best validation accuracy')
+    ax.set_ylabel('Test accuracy')
     span = best['accuracy'].max() - best['accuracy'].min()
     ax.set_ylim(max(0, best['accuracy'].min() - 0.3 * span), best['accuracy'].max() + 0.3 * span)
     _sparse_grid(ax, axis='y')
@@ -434,12 +434,20 @@ def plot_weight_distributions(df, colors, titles, pad_fraction=0.15, bw_adjust=0
 CLASS_COLOR = [COLOR_TARGET, COLOR_HIDDEN, COLOR_NONTARGET]  # rose / indigo / teal (2a/2f)
 
 
-def plot_predictions(df, class_col='predicted_class', colors=CLASS_COLOR, input_frmin=10, input_frmax=100):
-    """Feature map over (x, y) input space, colored by ``class_col`` (predicted or true class)."""
+def plot_predictions(df, class_col='predicted_class', colors=CLASS_COLOR, input_frmin=10, input_frmax=100, snippet_T=1000):
+    """Feature map over (x, y) input space, colored by ``class_col`` (predicted or true class),
+    with a raster plot for a selected datapoint underneath."""
     lims = (input_frmin - 6, input_frmax + 6)
 
-    latexify(width_fraction=0.5, base_font_size=9)
-    fig, ax = plt.subplots(constrained_layout=True)
+    # Make the figure taller to accommodate the raster plot
+    latexify(width_fraction=0.5, height_ratio=1.5, base_font_size=9)
+    fig = plt.figure(layout='constrained')
+    
+    # Create 3 columns so the raster plot can be placed in the middle, 60% width
+    gs = fig.add_gridspec(2, 3, height_ratios=[1.5, 0.2], width_ratios=[1, 10, 1])
+    
+    # Scatter plot spans all 3 columns
+    ax = fig.add_subplot(gs[0, :])
 
     for cls, color in enumerate(colors):
         d = df[df[class_col] == cls]
@@ -454,6 +462,56 @@ def plot_predictions(df, class_col='predicted_class', colors=CLASS_COLOR, input_
     ax.set_ylabel('Input y [Hz]')
     ax.grid(True, color='black', alpha=1)
 
+    # Find a datapoint with high x and low y
+    # We minimize distance to the bottom-right corner (input_frmax, input_frmin)
+    dists = (df['x'] - input_frmax)**2 + (df['y'] - input_frmin)**2
+    idx = dists.idxmin()
+    target_x = df.loc[idx, 'x']
+    target_y = df.loc[idx, 'y']
+    
+    # Highlight the selected datapoint on the scatter plot
+    ax.scatter(target_x, target_y, facecolors='none', edgecolors='red', s=40, linewidths=1.2, zorder=5)
+
+    # ==========================================
+    # Raster Plot for the selected datapoint
+    # ==========================================
+    # Place raster plot in the middle column (half width)
+    ax_raster = fig.add_subplot(gs[1, 1])
+    
+    # Generate Poisson spikes for the 4 channels
+    rates_hz = np.array([target_x, target_y, 100.0 - target_x, 100.0 - target_y])
+    rates_per_ms = rates_hz / 1000.0
+    spikes = np.random.rand(4, snippet_T) < rates_per_ms[:, None]
+    
+    neurons, times = np.where(spikes > 0)
+    ax_raster.scatter(times, neurons, s=9, linewidths=0, c='k')
+    
+    ax_raster.set_xlim(0, snippet_T)
+    ax_raster.set_ylim(-0.5, 3.5)
+    ax_raster.invert_yaxis()
+    
+    # Left Y-axis (Channel label, hide numeric ticks)
+    ax_raster.set_yticks([0, 1, 2, 3])
+    ax_raster.tick_params(labelleft=False)
+    ax_raster.set_ylabel("Channel")
+    
+    # Right Y-axis (Actual labels: x, y, 100-x, 100-y)
+    ax_right = ax_raster.twinx()
+    ax_right.set_ylim(ax_raster.get_ylim()) # match limits exactly
+    ax_right.set_yticks([0, 1, 2, 3])
+    ax_right.set_yticklabels(['x', 'y', '100-x', '100-y'])
+    ax_right.tick_params(axis='y', length=0) # optional: hide tick marks, just keep text
+    
+    ax_raster.tick_params(labelbottom=False)
+    ax_raster.set_xlabel("Time [ms]")
+    
+    # Clean up spines
+    ax_raster.spines['top'].set_visible(False)
+    ax_raster.spines['right'].set_visible(False)
+    ax_right.spines['top'].set_visible(False)
+    ax_right.spines['left'].set_visible(False)
+    ax_right.spines['right'].set_visible(False)
+    
     return fig
 
 def plot_sim_vs_dynapse_bars(df_dynapse, df_sim, y_min=0.0, y_max=1.0, group_order=None):
