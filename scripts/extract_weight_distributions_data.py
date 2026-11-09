@@ -39,6 +39,8 @@ DATASETS = {
             'in_hid1': ('in_hid1', 'weights_in_hid1_fine.dat'),
             'hid1_hid2': ('hid1_hid2', 'weights_hid1_hid2_fine.dat'),
             'hid2_out': ('hid2_out', 'weights_hid2_out_fine.dat'),
+            'fb_out_hid1': ('fb_out_hid1', 'weights_fb_out_hid1.dat'),
+            'fb_out_hid2': ('fb_out_hid2', 'weights_fb_out_hid2.dat'),
         },
         'drop_batch_axis': True,
     },

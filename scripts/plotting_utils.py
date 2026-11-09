@@ -371,9 +371,20 @@ def plot_population_accuracy_over_steps(df, n_pop, chance_level=0.1):
 YINYANG_WEIGHT_COLOR = {'in_hidden': COLOR_HIDDEN, 'hidden_out': COLOR_HIDDEN_OUT, 'feedback': COLOR_FEEDBACK}
 YINYANG_WEIGHT_TITLE = {'in_hidden': 'Input → hidden', 'hidden_out': 'Hidden → output', 'feedback': 'Feedback'}
 
-MNIST1D_WEIGHT_COLOR = {'in_hid1': COLOR_HIDDEN, 'hid1_hid2': COLOR_HIDDEN_OUT, 'hid2_out': COLOR_FEEDBACK}
-MNIST1D_WEIGHT_TITLE = {'in_hid1': 'Input → hidden 1', 'hid1_hid2': 'Hidden 1 → hidden 2',
-                        'hid2_out': 'Hidden 2 → output'}
+MNIST1D_WEIGHT_COLOR = {
+    'in_hid1': COLOR_HIDDEN,
+    'hid1_hid2': COLOR_HIDDEN_OUT,
+    'hid2_out': COLOR_NONTARGET,
+    'fb_out_hid1': COLOR_FEEDBACK,
+    'fb_out_hid2': COLOR_FEEDBACK,
+}
+MNIST1D_WEIGHT_TITLE = {
+    'in_hid1': 'Input → hidden 1',
+    'hid1_hid2': 'Hidden 1 → hidden 2',
+    'hid2_out': 'Hidden 2 → output',
+    'fb_out_hid1': 'Feedback → hidden 1',
+    'fb_out_hid2': 'Feedback → hidden 2',
+}
 
 PHASE_LABEL = {'init': 'Initialization', 'end': 'End of training'}
 PHASE_FILL_ALPHA = {'init': 0.25, 'end': 0.45}
@@ -381,17 +392,20 @@ PHASE_LINESTYLE = {'init': ':', 'end': '-'}
 
 
 def plot_weight_distributions(df, colors, titles, pad_fraction=0.15, bw_adjust=0.6):
-    """1x3 grid: KDE-smoothed weight distribution at initialization vs. end of training, one
+    """1xN grid: KDE-smoothed weight distribution at initialization vs. end of training, one
     panel per weight type (``colors``/``titles`` keys, in order), each in its own color. The area
     where the two distributions overlap is hatched to make it easy to spot.
 
     ``bw_adjust`` scales the KDE bandwidth relative to scipy's default (Scott's rule); less than
     1 makes the curve track the data more closely (less smoothing).
     """
-    latexify(width_fraction=1.0, base_font_size=9, height_ratio=0.4)
-    fig, axes = plt.subplots(1, 3, constrained_layout=True)
+    weight_types = [w for w in colors if w in set(df['weight_type'])]
+    n_cols = len(weight_types)
+    latexify(width_fraction=n_cols / 3.0, base_font_size=9, height_ratio=0.4 * 3.0 / n_cols)
+    fig, axes = plt.subplots(1, n_cols, constrained_layout=True)
+    axes = np.atleast_1d(axes)
 
-    for i, (ax, weight_type) in enumerate(zip(axes, colors)):
+    for i, (ax, weight_type) in enumerate(zip(axes, weight_types)):
         color = colors[weight_type]
         d = df[df['weight_type'] == weight_type]
         w_min, w_max = d['weight'].min(), d['weight'].max()
@@ -533,3 +547,181 @@ def plot_sim_vs_dynapse_box_plots(df_dynapse, df_sim, y_min=0.0, y_max=1.0, grou
     ax.legend(handles=legend_elements, loc=legend_loc)
 
     return fig
+
+
+# --- approaching hardware box plots ---------------------------------------------------------------
+
+HW_APPROACH_ORDER = (
+    'baseline',
+    'dpi_sat',
+    'w_sat',
+    'dpi_sat_w_sat',
+    'w_clip',
+    'dpi_sat_wclip',
+    'dpi_sat_ei_asym_quant',
+    'vfloor',
+    'ei_asym',
+    'ei_asym_vfloor',
+    'ei_asym_wclip',
+    'dpi_sat_ei_asym_wclip',
+    'quantized',
+    'full_hw_noquant',
+    'full_hw_noquant_init_tuned',
+    'full_hw_quant',
+)
+
+HW_APPROACH_LABEL = {
+    'baseline': 'Software\nbaseline',
+    'dpi_sat': 'DPI sat.',
+    'w_sat': 'Weight sat.',
+    'dpi_sat_w_sat': 'DPI +\nweight sat.',
+    'dpi_sat_ei_asym': 'DPI sat. +\nE/I asym.',
+    'dpi_sat_ei_asym_quant': 'DPI sat. +\nE/I asym. +\nweight quant.',
+    'w_clip': 'Weight clip',
+    'dpi_sat_wclip': 'DPI sat. +\nweight clip',
+    'vfloor': '$V_{\\mathrm{floor}}$',
+    'ei_asym': 'E/I asym.',
+    'ei_asym_vfloor': 'E/I asym. +\n$V_{\\mathrm{floor}}$',
+    'ei_asym_wclip': 'E/I asym. +\nweight clip',
+    'dpi_sat_ei_asym_wclip': 'DPI sat. + E/I\nasym. + weight clip',
+    'quantized': 'Quantized',
+    'full_hw_noquant': 'Full HW\n(no quant.)',
+    'full_hw_noquant_init_tuned': 'Full HW\n(tuned init.)',
+    'full_hw_quant': 'Full HW\n(quant.)',
+    'dynapse': 'Dynapse',
+}
+
+
+def _parse_hw_approach_note(note):
+    """Split a simulation ``note`` into ``(hw_config, regime)``.
+
+    The last two hyphen-separated tokens identify the learning algorithm
+    (``frozen-hidden`` -> ``frozen``, ``fixed-feedback`` -> ``fixed-feedback``,
+    ``locally-learnt`` -> ``full``); the preceding prefix identifies the modeled hardware
+    non-ideality, or ``'baseline'`` when only the learning algorithm is present.
+    """
+    if not isinstance(note, str):
+        return None, None
+    parts = note.strip().split('-')
+    if len(parts) < 2:
+        return None, None
+    algo_key = '-'.join(parts[-2:])
+    regime = NOTE_REGIME.get(algo_key)
+    if regime is None:
+        return None, None
+    hw_config = '-'.join(parts[:-2]) if len(parts) > 2 else 'baseline'
+    return hw_config, regime
+
+
+def plot_hardware_approach(df_sim, df_dynapse=None, hw_configs=None, include_baseline=True,
+                           y_min=0.05, y_max=0.85, config_order=HW_APPROACH_ORDER,
+                           config_labels=None, legend_loc='upper left'):
+    """Grouped box plot showing how modeling hardware non-idealities approaches DYNAP-SE across
+    Frozen, DFA, and Rec-LRA learning paradigms.
+
+    Parameters
+    ----------
+    df_sim : pd.DataFrame
+        Simulation dataframe loaded from ``mnist1d_approaching_hardware.csv`` (with ``note`` and
+        ``test accuracy (Max)`` / ``eval accuracy`` columns).
+    df_dynapse : pd.DataFrame, optional
+        DYNAP-SE dataframe (e.g. ``mnist1d_accuracy.csv``) processed via ``compute_best_val`` and
+        appended as the final group on the right when provided.
+    hw_configs : str or sequence of str, optional
+        Hardware non-ideality names (as used in the CSV ``note`` prefix, e.g.
+        ``['dpi_sat', 'w_clip', 'ei_asym', 'full_hw_quant']``) to plot. When ``None`` (default),
+        all configurations in the CSV are plotted in ``config_order``.
+    include_baseline : bool, default True
+        Whether to prepend the software ``'baseline'`` column when ``hw_configs`` is specified.
+    """
+    from matplotlib.patches import Patch
+
+    df = df_sim.copy()
+    if 'test accuracy (Max)' not in df.columns:
+        df['test accuracy (Max)'] = np.nan
+    acc = pd.to_numeric(df['test accuracy (Max)'], errors='coerce')
+    if 'eval accuracy' in df.columns:
+        acc = acc.fillna(pd.to_numeric(df['eval accuracy'], errors='coerce'))
+    if 'test accuracy (max)' in df.columns:
+        acc = acc.fillna(pd.to_numeric(df['test accuracy (max)'], errors='coerce'))
+    # Guard against locale-formatted values (e.g. 625.0 instead of 0.625).
+    acc = acc.where(acc <= 1.0, np.where(acc > 100.0, acc / 1000.0, acc / 100.0))
+    df['_accuracy'] = acc
+
+    parsed = df['note'].apply(_parse_hw_approach_note)
+    df['_hw_config'] = [p[0] for p in parsed]
+    df['_regime'] = [p[1] for p in parsed]
+    df = df.dropna(subset=['_hw_config', '_regime', '_accuracy'])
+
+    available_configs = set(df['_hw_config'].unique())
+    if hw_configs is not None:
+        if isinstance(hw_configs, str):
+            hw_configs = [hw_configs]
+        requested = list(hw_configs)
+        if include_baseline and 'baseline' in available_configs and 'baseline' not in requested:
+            requested = ['baseline'] + requested
+        groups = [c for c in requested if c in available_configs]
+    else:
+        groups = [c for c in config_order if c in available_configs]
+        for c in df['_hw_config'].unique():
+            if c not in groups:
+                groups.append(c)
+
+    best_dynapse = None
+    if df_dynapse is not None and not df_dynapse.empty:
+        best_dynapse = compute_best_val(df_dynapse, 'accuracy', 'higher')
+        groups.append('dynapse')
+
+    regimes = [r for r in REGIME_COLOR if r in set(df['_regime'].unique())]
+    n_groups = len(groups)
+
+    width_fraction = max(0.6, n_groups * 0.14)
+    height_ratio = min(0.7, 0.38 * max(1.0, 12.0 / max(1, n_groups)))
+    latexify(width_fraction=width_fraction, base_font_size=9, height_ratio=height_ratio)
+    fig, ax = plt.subplots(constrained_layout=True)
+
+    group_width = 0.78
+    box_step = group_width / len(regimes)
+    offsets = (np.arange(len(regimes)) - (len(regimes) - 1) / 2) * box_step
+    x = np.arange(n_groups)
+
+    for regime, offset in zip(regimes, offsets):
+        sim_data, sim_pos = [], []
+        dyn_data, dyn_pos = [], []
+        for i, grp in enumerate(groups):
+            if grp == 'dynapse':
+                d = best_dynapse[best_dynapse['regime'] == regime]['accuracy'].dropna().values
+                if len(d) > 0:
+                    dyn_data.append(d)
+                    dyn_pos.append(x[i] + offset)
+            else:
+                d = df[(df['_hw_config'] == grp) & (df['_regime'] == regime)]['_accuracy'].dropna().values
+                if len(d) > 0:
+                    sim_data.append(d)
+                    sim_pos.append(x[i] + offset)
+        if sim_data:
+            _boxplot(ax, sim_data, sim_pos, box_step * 0.82, _lighten(REGIME_COLOR[regime], factor=0.35))
+        if dyn_data:
+            _boxplot(ax, dyn_data, dyn_pos, box_step * 0.82, REGIME_COLOR[regime])
+
+    # Subtle vertical dividers separating Software baseline and Dynapse from intermediate configs.
+    if 'baseline' in groups and groups.index('baseline') == 0 and n_groups > 1:
+        ax.axvline(0.5, color='#888888', linestyle='--', linewidth=0.9, alpha=0.6)
+    if 'dynapse' in groups and groups.index('dynapse') == n_groups - 1 and n_groups > 1:
+        ax.axvline(n_groups - 1.5, color='#888888', linestyle='--', linewidth=0.9, alpha=0.6)
+
+    labels_lookup = {**HW_APPROACH_LABEL, **(config_labels or {})}
+    tick_labels = [labels_lookup.get(g, g.replace('_', ' ')) for g in groups]
+    ax.set_xticks(x)
+    ax.set_xticklabels(tick_labels, rotation=30, ha='right')
+    ax.set_xlim(-0.6, n_groups - 0.4)
+    ax.set_ylim(y_min, y_max)
+    ax.set_ylabel('Best validation accuracy')
+    ax.tick_params(axis='both', labelsize=8)
+    _sparse_grid(ax, axis='y')
+
+    legend_handles = [Patch(facecolor=REGIME_COLOR[r], label=REGIME_LABEL[r]) for r in regimes]
+    ax.legend(handles=legend_handles, loc=legend_loc, ncol=len(regimes))
+
+    return fig
+
