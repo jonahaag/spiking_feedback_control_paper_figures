@@ -29,8 +29,9 @@ CMAP_HIDDEN = LinearSegmentedColormap.from_list('hidden', [(1, 1, 1, 1), to_rgba
 
 # Training regimes, in the order they appear in every figure (legends, x positions). 'full' is
 # the learnt-feedback regime (Rec-LRA), 'fixed-feedback' fixed random feedback (DFA).
+# REGIME_LABEL is the single place that sets how the regimes are named in all figures.
 REGIME_COLOR = {'frozen': COLOR_FROZEN, 'fixed-feedback': COLOR_NONTARGET, 'full': COLOR_FULL}
-REGIME_LABEL = {'frozen': 'Frozen', 'fixed-feedback': 'DFA', 'full': 'Rec-LRA'}
+REGIME_LABEL = {'frozen': 'Frozen', 'fixed-feedback': 'Fixed Feedback', 'full': 'Full Local'}
 
 # Simulation runs label regimes by their wandb 'note'.
 NOTE_REGIME = {'frozen-hidden': 'frozen', 'fixed-feedback': 'fixed-feedback', 'locally-learnt': 'full'}
@@ -543,7 +544,7 @@ def plot_sim_vs_dynapse_box_plots(df_dynapse, df_sim, y_min=0.0, y_max=1.0, grou
 
     ax.set_xticks(x)
     label_map = {
-        **{n: REGIME_LABEL[r] for n, r in NOTE_REGIME.items()},
+        **{n: REGIME_LABEL[r].replace(' ', '\n') for n, r in NOTE_REGIME.items()},  # wrap long tick labels
         'kp': 'KP',
         'surrogate gradient': 'Surrogate\nGradient',
         'backprop': 'ANN\n(SGD)'
