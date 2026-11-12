@@ -303,28 +303,28 @@ def _boxplot(ax, data, positions, width, color):
     )
 
 
-def plot_grouped_box_by_chip(df, legend_loc='best', legend_ncol=1):
-    """Best validation accuracy per regime, grouped by chip, as box plots over seeds.
-
-    Shows whether results are consistent across chips. Only regimes present in ``df`` are plotted,
-    in ``REGIME_COLOR`` order.
+def _plot_grouped_box(df, group_col, tick_label, legend_loc='best', legend_ncol=1, xlabel=None):
+    """Best validation accuracy per regime, grouped by ``group_col`` (x axis), as box plots over the
+    remaining runs. Only regimes present in ``df`` are plotted, in ``REGIME_COLOR`` order.
+    ``tick_label`` formats a group value, e.g. ``'Chip {}'``.
     """
     from matplotlib.patches import Patch
 
-    best = compute_best_val(df, 'accuracy', 'higher')
+    by = ('regime', 'seed', 'chip') if group_col == 'chip' else ('regime', group_col, 'seed', 'chip')
+    best = compute_best_val(df, 'accuracy', 'higher', by=by)
     regimes = [r for r in REGIME_COLOR if r in best['regime'].unique()]
 
     latexify(width_fraction=0.6, base_font_size=9, height_ratio=0.7)
     fig, ax = plt.subplots(constrained_layout=True)
     width = 0.8 / len(regimes)
 
-    values = sorted(best['chip'].unique())
+    values = sorted(best[group_col].unique())
     x = np.arange(len(values))
     offsets = (np.arange(len(regimes)) - (len(regimes) - 1) / 2) * width
     for regime, offset in zip(regimes, offsets):
         data, positions = [], []
-        for i, chip in enumerate(values):
-            d = best[(best['regime'] == regime) & (best['chip'] == chip)]['accuracy'].dropna().values
+        for i, value in enumerate(values):
+            d = best[(best['regime'] == regime) & (best[group_col] == value)]['accuracy'].dropna().values
             if len(d) > 0:
                 data.append(d)
                 positions.append(x[i] + offset)
@@ -332,7 +332,9 @@ def plot_grouped_box_by_chip(df, legend_loc='best', legend_ncol=1):
             _boxplot(ax, data, positions, width * 0.8, REGIME_COLOR[regime])
 
     ax.set_xticks(x)
-    ax.set_xticklabels([f'Chip {v}' for v in values])
+    ax.set_xticklabels([tick_label.format(v) for v in values])
+    if xlabel:
+        ax.set_xlabel(xlabel)
     ax.set_ylabel('Best validation accuracy')
     span = best['accuracy'].max() - best['accuracy'].min()
     ax.set_ylim(max(0, best['accuracy'].min() - 0.3 * span), best['accuracy'].max() + 0.3 * span)
@@ -343,7 +345,20 @@ def plot_grouped_box_by_chip(df, legend_loc='best', legend_ncol=1):
     return fig
 
 
-# --- population size (n_pop=2) -------------------------------------------------------------------
+def plot_grouped_box_by_chip(df, legend_loc='best', legend_ncol=1):
+    """Best validation accuracy per regime, grouped by chip (4b/4c): shows whether results are
+    consistent across chips."""
+    return _plot_grouped_box(df, 'chip', 'Chip {}', legend_loc=legend_loc, legend_ncol=legend_ncol)
+
+
+# --- population size ------------------------------------------------------------------------------
+
+def plot_box_by_population(df, legend_loc='best', legend_ncol=1):
+    """Best validation accuracy per regime vs. population size (``n_pop`` column), as box plots
+    over seeds x chips, in the 4b/4c style."""
+    return _plot_grouped_box(df, 'n_pop', '{}', legend_loc=legend_loc, legend_ncol=legend_ncol,
+                             xlabel='Population size $n_{pop}$')
+
 
 def plot_population_accuracy_over_steps(df, n_pop, chance_level=0.1):
     """3b-style accuracy over training for a single population size: training line +/- band,
