@@ -2,7 +2,7 @@
 weight values.
 
 Both dynapse_results/yinyang/full/201285_0/ (yin-yang) and
-dynapse_results/mnist1d/full/201175_0/ (mnist1d) have per-batch weight snapshots for their forward
+dynapse_results/mnist1d/archive/full_lr_original/201175_0/ (mnist1d) have per-batch weight snapshots for their forward
 (and, for yin-yang, feedback) weight matrices. The mnist1d files have a known bug: the shape
 recorded in trainlog.pkl includes a spurious batch_size axis that doesn't match the actual file
 size (see load_weights.py) -- the real per-file shape is (n_batches, n_pre, n_post), so that axis
@@ -34,7 +34,7 @@ DATASETS = {
         'drop_batch_axis': False,
     },
     'mnist1d': {
-        'run_path': '../dynapse_results/mnist1d/full/201175_0',
+        'run_path': '../dynapse_results/mnist1d/archive/full_lr_original/201175_0',
         'weights': {
             'in_hid1': ('in_hid1', 'weights_in_hid1_fine.dat'),
             'hid1_hid2': ('hid1_hid2', 'weights_hid1_hid2_fine.dat'),

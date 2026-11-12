@@ -10,6 +10,10 @@ size and learning rates come from its params.pkl. Writes:
   * dynapse_results/mnist1d/population_experiments/runs.csv -- one row per run (all run sets) with
     its settings and best-validation / test accuracy
 
+The n_pop=8 run sets (npop8_dfa / npop8_rlra) are the main mnist1d DFA / Rec-LRA data: copies of
+them live in dynapse_results/mnist1d/{fixed_random_feedback,full}/ and are extracted by
+extract_accuracy_data.py, so here they only appear in runs.csv.
+
 Both accuracy CSVs have one row per (regime, n_pop, split, seed, chip, step); besides the
 'train'/'val' curves, every run gets one 'test' row (at the last validation step) holding its test
 scalars. Run from within scripts/:
@@ -26,17 +30,22 @@ import summarize_runs as sr
 
 POPULATION_DIR = '../dynapse_results/mnist1d/population_experiments'
 
-# run set (subdirectory of POPULATION_DIR) -> (output 'regime' label, used in figures)
+# run set (subdirectory of POPULATION_DIR) -> (output 'regime' label, where the run set is used)
 # 'regime' labels match data/dynapse/mnist1d_accuracy.csv: fixed-feedback = DFA, full = Rec-LRA.
+# Usage: 'npop2' -> USED_OUTPUT_PATH, 'main' -> main mnist1d data (only listed in runs.csv),
+# None -> ARCHIVE_OUTPUT_PATH.
 RUN_SETS = {
-    'npop2_dfa': ('fixed-feedback', True),
-    'npop2_rlra': ('full', True),
-    'archive/sweep_lr_scaled_dfa': ('fixed-feedback', False),
-    'archive/sweep_lr_scaled_rlra': ('full', False),
-    'archive/npop4_unscaled_lr_dfa': ('fixed-feedback', False),
-    'archive/npop4_unscaled_lr_rlra': ('full', False),
-    'archive/npop2_lr2x_rlra': ('full', False),
+    'npop8_dfa': ('fixed-feedback', 'main'),
+    'npop8_rlra': ('full', 'main'),
+    'npop2_dfa': ('fixed-feedback', 'npop2'),
+    'npop2_rlra': ('full', 'npop2'),
+    'archive/sweep_lr_scaled_dfa': ('fixed-feedback', None),
+    'archive/sweep_lr_scaled_rlra': ('full', None),
+    'archive/npop4_unscaled_lr_dfa': ('fixed-feedback', None),
+    'archive/npop4_unscaled_lr_rlra': ('full', None),
+    'archive/npop2_lr2x_rlra': ('full', None),
 }
+USED_IN = {'main': 'mnist1d main data (3b, 3c, 4c)', 'npop2': 'npop2_training_curves', None: ''}
 
 LEARNING_RATES = ['learning_rate_hid1', 'learning_rate_hid2', 'learning_rate_out',
                   'learning_rate_feedback', 'learning_rate_feedback_hid1']
@@ -65,7 +74,7 @@ def _params(path):
 def extract():
     """(curve rows, manifest rows) for all run sets."""
     rows, manifest = [], []
-    for run_set, (label, used) in RUN_SETS.items():
+    for run_set, (label, usage) in RUN_SETS.items():
         for path in discover_runs(run_set):
             run = sr.load_run(path)
             par = _params(path)
@@ -81,7 +90,7 @@ def extract():
                          'accuracy': run['test']['classification_accuracy'],
                          'target_error': run['test']['target_error']})
             manifest.append({
-                **base, 'used': used, 'timestamp': os.path.basename(os.path.dirname(path)),
+                **base, 'used_in': USED_IN[usage], 'timestamp': os.path.basename(os.path.dirname(path)),
                 'update_feedback_weights': par.get('update_feedback_weights'),
                 **{k: par.get(k) for k in LEARNING_RATES},
                 'best_val_accuracy': run['best_val']['classification_accuracy'],
@@ -92,12 +101,12 @@ def extract():
 
 def main():
     df, manifest = extract()
-    used_sets = [s for s, (_, used) in RUN_SETS.items() if used]
-    used = df['run_set'].isin(used_sets)
+    usage = df['run_set'].map(lambda s: RUN_SETS[s][1])
+    used, archived = usage == 'npop2', usage.isna()
     df[used][COLUMNS].to_csv(USED_OUTPUT_PATH, index=False)
-    df[~used][['run_set'] + COLUMNS].to_csv(ARCHIVE_OUTPUT_PATH, index=False)
+    df[archived][['run_set'] + COLUMNS].to_csv(ARCHIVE_OUTPUT_PATH, index=False)
     manifest.to_csv(MANIFEST_PATH, index=False)
-    print(f"Wrote {USED_OUTPUT_PATH} ({used.sum()} rows), {ARCHIVE_OUTPUT_PATH} ({(~used).sum()} rows), "
+    print(f"Wrote {USED_OUTPUT_PATH} ({used.sum()} rows), {ARCHIVE_OUTPUT_PATH} ({archived.sum()} rows), "
           f"{MANIFEST_PATH} ({len(manifest)} runs)")
     print(manifest.groupby(['run_set', 'n_pop'], sort=False).agg(
         runs=('seed', 'size'), seeds=('seed', 'nunique'),

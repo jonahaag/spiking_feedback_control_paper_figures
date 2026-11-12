@@ -303,7 +303,7 @@ def _boxplot(ax, data, positions, width, color):
     )
 
 
-def plot_grouped_box_by_chip(df, legend_loc='best'):
+def plot_grouped_box_by_chip(df, legend_loc='best', legend_ncol=1):
     """Best validation accuracy per regime, grouped by chip, as box plots over seeds.
 
     Shows whether results are consistent across chips. Only regimes present in ``df`` are plotted,
@@ -337,7 +337,8 @@ def plot_grouped_box_by_chip(df, legend_loc='best'):
     span = best['accuracy'].max() - best['accuracy'].min()
     ax.set_ylim(max(0, best['accuracy'].min() - 0.3 * span), best['accuracy'].max() + 0.3 * span)
     _sparse_grid(ax, axis='y')
-    ax.legend(handles=[Patch(facecolor=REGIME_COLOR[r], label=REGIME_LABEL[r]) for r in regimes], loc=legend_loc)
+    ax.legend(handles=[Patch(facecolor=REGIME_COLOR[r], label=REGIME_LABEL[r]) for r in regimes], loc=legend_loc,
+              ncol=legend_ncol)
 
     return fig
 

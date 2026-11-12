@@ -1,6 +1,6 @@
 """Convert the raw output/target-rate arrays for one run into a simple long-format CSV.
 
-dynapse_results/mnist1d/full/201175_0/ has outputs.dat and measured_target.dat: per-sample,
+dynapse_results/mnist1d/archive/full_lr_original/201175_0/ has outputs.dat and measured_target.dat: per-sample,
 per-class measured output firing rate and presented target firing rate (shape recorded in
 trainlog.pkl -- unlike the weights_*.dat files, this shape is correct, no reshape workaround
 needed). Per (batch, sample) exactly one of the 10 output classes is the "target" class for that
@@ -17,7 +17,7 @@ import pandas as pd
 
 from summarize_runs import _load_pickle
 
-RUN_PATH = '../dynapse_results/mnist1d/full/201175_0'
+RUN_PATH = '../dynapse_results/mnist1d/archive/full_lr_original/201175_0'
 OUTPUT_DIR = '../data/dynapse'
 
 

@@ -14,6 +14,8 @@ All settings that are not listed below are identical across run sets apart from 
 
 | Run set | Method | n_pop | Seeds × chips | Learning rates | Used in figures |
 |---|---|---|---|---|---|
+| `npop8_dfa` | DFA | 8 | 5 × 3 | `lr_out=1e-4`, `lr_hid1=2e-5`, `lr_hid2=4e-5` (2× the 1/n_pop rule) | **yes**, as main mnist1d DFA data (3c, 4c) |
+| `npop8_rlra` | Rec-LRA | 8 | 5 × 3 | same forward LRs as `npop8_dfa`; feedback `lr_fb=2e-6`, `lr_fb_hid1=4e-6` | **yes**, as main mnist1d Rec-LRA data (3b, 3c, 4c) |
 | `npop2_dfa` | DFA | 2 | 5 × 3 | `lr_out=4e-4`, `lr_hid1=8e-5`, `lr_hid2=1.6e-4` (2× the 1/n_pop rule, i.e. the n_pop=1 rates) | **yes** |
 | `npop2_rlra` | Rec-LRA | 2 | 5 × 3 | same forward LRs as `npop2_dfa`; feedback `lr_fb=8e-6`, `lr_fb_hid1=1.6e-5` | **yes** |
 | `archive/sweep_lr_scaled_dfa` | DFA | 1, 2, 3, 4 | 1, 5, 5, 1 seeds × 3 | `lr ∝ 1/n_pop` (`lr_out = 4e-4 / n_pop`) | no |
@@ -25,8 +27,11 @@ All settings that are not listed below are identical across run sets apart from 
 Also scaled with n_pop in every run set: `WMAX_hid1 = 4·n_pop`, `WMAX_hid2 = WMAX_out = 2·n_pop`,
 `sigma_ff = 0.5·n_pop`.
 
-The n_pop=8 reference is the main mnist1d data (`dynapse_results/mnist1d/{full,fixed_random_feedback}`,
-`lr_out = 5e-5`), which follows the same `lr ∝ 1/n_pop` rule as the sweep.
+`npop8_dfa` / `npop8_rlra` are copied (loader files only, without the timestamp level) to the
+tracked main mnist1d folders `dynapse_results/mnist1d/{fixed_random_feedback,full}/<seed>_<chip>`
+and extracted by `extract_accuracy_data.py` into `data/dynapse/mnist1d_accuracy.csv`. The original
+n_pop=8 runs they replaced (`lr_out = 5e-5`, exactly the `lr ∝ 1/n_pop` rule of the sweep) are in
+`dynapse_results/mnist1d/archive/{fixed_random_feedback,full}_lr_original/`.
 
 ## Original folder names
 
